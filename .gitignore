@@ -1,0 +1,21 @@
+# Terraform state (use remote backend — see ARCHITECTURE.md)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Backend credentials (never commit)
+backend.conf
+
+# SSL certificates
+*.pfx
+*.pem
+*.key
+*.crt
+
+# Variable files with secrets
+*.tfvars
+!*.tfvars.example
+
+# OS
+.DS_Store
