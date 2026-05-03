@@ -10,9 +10,6 @@ variable "appgw_subnet_id" {
   type = string
 }
 
-variable "bastion_subnet_id" {
-  type = string
-}
 
 variable "gitlab_private_ip" {
   type    = string

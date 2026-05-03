@@ -3,10 +3,6 @@ output "appgw_public_ip" {
   description = "Point gitlab.boukingolts.art and registry.boukingolts.art DNS A records here"
 }
 
-output "bastion_fqdn" {
-  value       = module.ingress.bastion_fqdn
-  description = "Azure Bastion FQDN — access VMs via 'az network bastion ssh' or Azure Portal"
-}
 
 output "gitlab_private_ip" {
   value       = module.vms.gitlab_private_ip
@@ -31,4 +27,9 @@ output "nfs_mount_path" {
 output "internal_dns_zone" {
   value       = module.network.internal_dns_zone
   description = "Private DNS zone — gitlab.internal.gallery.local and vault.internal.gallery.local"
+}
+
+output "gitlab_public_ip" {
+  value       = module.vms.gitlab_public_ip
+  description = "Temporary GitLab public IP — non-null only when enable_gitlab_public_ip = true"
 }
