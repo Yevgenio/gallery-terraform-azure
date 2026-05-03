@@ -163,8 +163,21 @@ resource "azurerm_network_security_group" "bastion" {
     destination_port_range     = "443"
   }
 
+  # Required for Bastion host-to-host coordination
   security_rule {
-    name                       = "Allow-SSH-VNet"
+    name                       = "Allow-BastionHostComm-Inbound"
+    priority                   = 130
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "VirtualNetwork"
+    source_port_range          = "*"
+    destination_address_prefix = "VirtualNetwork"
+    destination_port_ranges    = ["8080", "5701"]
+  }
+
+  security_rule {
+    name                       = "Allow-SshRdp-VNet"
     priority                   = 100
     direction                  = "Outbound"
     access                     = "Allow"
@@ -172,7 +185,7 @@ resource "azurerm_network_security_group" "bastion" {
     source_address_prefix      = "*"
     source_port_range          = "*"
     destination_address_prefix = "VirtualNetwork"
-    destination_port_range     = "22"
+    destination_port_ranges    = ["22", "3389"]
   }
 
   security_rule {
@@ -185,6 +198,32 @@ resource "azurerm_network_security_group" "bastion" {
     source_port_range          = "*"
     destination_address_prefix = "AzureCloud"
     destination_port_range     = "443"
+  }
+
+  # Required for Bastion host-to-host coordination
+  security_rule {
+    name                       = "Allow-BastionHostComm-Outbound"
+    priority                   = 120
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "*"
+    source_port_range          = "*"
+    destination_address_prefix = "VirtualNetwork"
+    destination_port_ranges    = ["8080", "5701"]
+  }
+
+  # Required for Bastion to validate session tokens
+  security_rule {
+    name                       = "Allow-GetSessionInfo-Outbound"
+    priority                   = 130
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "*"
+    source_port_range          = "*"
+    destination_address_prefix = "Internet"
+    destination_port_range     = "80"
   }
 
   tags = var.tags
