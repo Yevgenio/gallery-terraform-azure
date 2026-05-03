@@ -16,9 +16,13 @@ resource "azurerm_application_gateway" "main" {
   tags                = var.tags
 
   sku {
-    name     = "Standard_v2"
-    tier     = "Standard_v2"
-    capacity = 2
+    name = "Standard_v2"
+    tier = "Standard_v2"
+  }
+
+  autoscale_configuration {
+    min_capacity = 0
+    max_capacity = 2
   }
 
   gateway_ip_configuration {
@@ -41,16 +45,21 @@ resource "azurerm_application_gateway" "main" {
     port = 443
   }
 
+  # ── Backend pools ──────────────────────────────────────────────────────────
+
   backend_address_pool {
     name         = "gitlab"
     ip_addresses = [var.gitlab_private_ip]
   }
 
-  # Populate with AKS internal LB IP once the cluster is running,
-  # or enable AGIC to manage this pool from Kubernetes Ingress objects.
+  # Populate aks_internal_lb_ip variable after the AKS internal LoadBalancer
+  # Service is created, or enable AGIC to manage routing from Ingress objects.
   backend_address_pool {
-    name = "aks"
+    name         = "aks"
+    ip_addresses = var.aks_internal_lb_ip != "" ? [var.aks_internal_lb_ip] : []
   }
+
+  # ── Backend HTTP settings ──────────────────────────────────────────────────
 
   backend_http_settings {
     name                  = "gitlab-http"
@@ -60,11 +69,27 @@ resource "azurerm_application_gateway" "main" {
     request_timeout       = 60
   }
 
+  # Host header is preserved so the AKS ingress controller can route by hostname.
+  backend_http_settings {
+    name                                = "aks-http"
+    cookie_based_affinity               = "Disabled"
+    port                                = 80
+    protocol                            = "Http"
+    request_timeout                     = 60
+    pick_host_name_from_backend_address = false
+  }
+
+  # ── SSL certificate ────────────────────────────────────────────────────────
+
   ssl_certificate {
     name     = "gallery-cert"
     data     = filebase64(var.ssl_cert_path)
     password = var.ssl_cert_password
   }
+
+  # ── HTTP listener — catch-all redirect to HTTPS ────────────────────────────
+  # target_listener_name only determines scheme+port for the 301 Location header;
+  # the original Host is always preserved, so one rule covers all hostnames.
 
   http_listener {
     name                           = "http"
@@ -73,18 +98,10 @@ resource "azurerm_application_gateway" "main" {
     protocol                       = "Http"
   }
 
-  http_listener {
-    name                           = "https"
-    frontend_ip_configuration_name = "public"
-    frontend_port_name             = "https"
-    protocol                       = "Https"
-    ssl_certificate_name           = "gallery-cert"
-  }
-
   redirect_configuration {
     name                 = "http-to-https"
     redirect_type        = "Permanent"
-    target_listener_name = "https"
+    target_listener_name = "https-gitlab"
     include_path         = true
     include_query_string = true
   }
@@ -97,13 +114,80 @@ resource "azurerm_application_gateway" "main" {
     redirect_configuration_name = "http-to-https"
   }
 
+  # ── HTTPS listeners ────────────────────────────────────────────────────────
+
+  http_listener {
+    name                           = "https-gitlab"
+    frontend_ip_configuration_name = "public"
+    frontend_port_name             = "https"
+    protocol                       = "Https"
+    ssl_certificate_name           = "gallery-cert"
+    host_names                     = [var.gitlab_hostname]
+  }
+
+  http_listener {
+    name                           = "https-argocd"
+    frontend_ip_configuration_name = "public"
+    frontend_port_name             = "https"
+    protocol                       = "Https"
+    ssl_certificate_name           = "gallery-cert"
+    host_names                     = [var.argocd_hostname]
+  }
+
+  http_listener {
+    name                           = "https-gallery"
+    frontend_ip_configuration_name = "public"
+    frontend_port_name             = "https"
+    protocol                       = "Https"
+    ssl_certificate_name           = "gallery-cert"
+    host_names                     = [var.gallery_hostname]
+  }
+
+  http_listener {
+    name                           = "https-grafana"
+    frontend_ip_configuration_name = "public"
+    frontend_port_name             = "https"
+    protocol                       = "Https"
+    ssl_certificate_name           = "gallery-cert"
+    host_names                     = [var.grafana_hostname]
+  }
+
+  # ── HTTPS routing rules ────────────────────────────────────────────────────
+
   request_routing_rule {
     name                       = "https-gitlab"
     rule_type                  = "Basic"
     priority                   = 20
-    http_listener_name         = "https"
+    http_listener_name         = "https-gitlab"
     backend_address_pool_name  = "gitlab"
     backend_http_settings_name = "gitlab-http"
+  }
+
+  request_routing_rule {
+    name                       = "https-argocd"
+    rule_type                  = "Basic"
+    priority                   = 30
+    http_listener_name         = "https-argocd"
+    backend_address_pool_name  = "aks"
+    backend_http_settings_name = "aks-http"
+  }
+
+  request_routing_rule {
+    name                       = "https-gallery"
+    rule_type                  = "Basic"
+    priority                   = 40
+    http_listener_name         = "https-gallery"
+    backend_address_pool_name  = "aks"
+    backend_http_settings_name = "aks-http"
+  }
+
+  request_routing_rule {
+    name                       = "https-grafana"
+    rule_type                  = "Basic"
+    priority                   = 50
+    http_listener_name         = "https-grafana"
+    backend_address_pool_name  = "aks"
+    backend_http_settings_name = "aks-http"
   }
 
 }
@@ -122,8 +206,7 @@ resource "azurerm_bastion_host" "main" {
   name                = "gallery-bastion"
   location            = var.location
   resource_group_name = var.resource_group_name
-  sku                 = "Standard"
-  tunneling_enabled   = true
+  sku                 = "Basic"
 
   ip_configuration {
     name                 = "ipconfig"

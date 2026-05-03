@@ -27,7 +27,7 @@ resource "azurerm_linux_virtual_machine" "gitlab" {
   name                  = "gitlab-vm"
   location              = var.location
   resource_group_name   = var.resource_group_name
-  size                  = "Standard_B2ms"   # 2 vCPU / 8 GB — max 8 GB RAM
+  size                  = "Standard_D2s_v3"  # 2 vCPU / 8 GB
   admin_username        = "azureuser"
   network_interface_ids = [azurerm_network_interface.gitlab.id]
 
@@ -39,7 +39,7 @@ resource "azurerm_linux_virtual_machine" "gitlab" {
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
-    disk_size_gb         = 100
+    disk_size_gb         = 32
   }
 
   source_image_reference {
@@ -81,7 +81,7 @@ resource "azurerm_linux_virtual_machine" "vault" {
   name                  = "vault-vm"
   location              = var.location
   resource_group_name   = var.resource_group_name
-  size                  = "Standard_B1s"    # 1 vCPU / 1 GB — max 1 GB RAM
+  size                  = "Standard_D2as_v4"   # 2 vCPU / 8 GB — smallest Gen 2 available in westeurope
   admin_username        = "azureuser"
   network_interface_ids = [azurerm_network_interface.vault.id]
 
@@ -93,7 +93,7 @@ resource "azurerm_linux_virtual_machine" "vault" {
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
-    disk_size_gb         = 30
+    disk_size_gb         = 32
   }
 
   source_image_reference {
