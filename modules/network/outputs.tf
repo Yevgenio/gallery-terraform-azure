@@ -25,3 +25,7 @@ output "vault_nsg_id" {
 output "internal_dns_zone" {
   value = azurerm_private_dns_zone.internal.name
 }
+
+output "nat_gateway_pip" {
+  value = azurerm_public_ip.nat.ip_address
+}

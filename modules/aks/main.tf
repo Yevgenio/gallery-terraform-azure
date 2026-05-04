@@ -8,8 +8,9 @@ resource "azurerm_kubernetes_cluster" "gallery" {
   api_server_access_profile {
     authorized_ip_ranges = [
       var.admin_ssh_cidr,
-      "10.2.1.0/24", # infra subnet — GitLab runner, Vault, ops tooling
-      "10.2.0.0/24", # appgw subnet — Application Gateway health probes
+      "10.2.1.0/24",          # infra subnet — GitLab runner, Vault, ops tooling
+      "10.2.0.0/24",          # appgw subnet — Application Gateway health probes
+      var.nat_gateway_pip     # NAT Gateway public IP — nodes egress via this to reach the API server
     ]
   }
 
@@ -27,8 +28,9 @@ resource "azurerm_kubernetes_cluster" "gallery" {
   }
 
   network_profile {
-    network_plugin = "azure"
-    network_policy = "azure"
+    network_plugin    = "azure"
+    network_policy    = "azure"
+    outbound_type     = "userAssignedNATGateway"
   }
 
   tags = var.tags

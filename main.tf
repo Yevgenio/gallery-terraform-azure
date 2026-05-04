@@ -39,6 +39,7 @@ module "aks" {
   location            = azurerm_resource_group.gallery.location
   aks_subnet_id       = module.network.aks_subnet_id
   admin_ssh_cidr      = var.admin_ssh_cidr
+  nat_gateway_pip     = module.network.nat_gateway_pip
   tags                = local.common_tags
 }
 
