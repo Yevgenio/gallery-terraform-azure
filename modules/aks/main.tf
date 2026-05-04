@@ -34,19 +34,6 @@ resource "azurerm_kubernetes_cluster" "gallery" {
   tags = var.tags
 }
 
-# CI runner pool — executes GitLab pipeline jobs. GitLab and Vault run on dedicated VMs, not here.
-# Scales to zero between jobs.
-resource "azurerm_kubernetes_cluster_node_pool" "agents" {
-  name                  = "agents"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.gallery.id
-  vm_size               = "Standard_D2s_v3"  # 2 vCPU / 4 GB
-  vnet_subnet_id        = var.aks_subnet_id
-  auto_scaling_enabled  = true
-  min_count             = 0
-  max_count             = 4
-  tags                  = var.tags
-}
-
 # The AKS node resource group (MC_...) is created automatically by Azure.
 # Azure Files CSI driver creates storage accounts there for dynamic PVC provisioning.
 data "azurerm_resource_group" "aks_nodes" {

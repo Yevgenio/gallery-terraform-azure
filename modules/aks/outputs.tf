@@ -6,3 +6,7 @@ output "kube_config" {
   value     = azurerm_kubernetes_cluster.gallery.kube_config_raw
   sensitive = true
 }
+
+output "fqdn" {
+  value = azurerm_kubernetes_cluster.gallery.fqdn
+}

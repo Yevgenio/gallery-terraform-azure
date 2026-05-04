@@ -52,6 +52,14 @@ module "storage" {
   tags                 = local.common_tags
 }
 
+resource "azurerm_private_dns_cname_record" "aks" {
+  name                = "aks"
+  zone_name           = module.network.internal_dns_zone
+  resource_group_name = azurerm_resource_group.gallery.name
+  ttl                 = 300
+  record              = module.aks.fqdn
+}
+
 module "ingress" {
   source = "./modules/ingress"
 
