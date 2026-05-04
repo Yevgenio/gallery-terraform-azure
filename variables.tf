@@ -57,9 +57,3 @@ variable "storage_account_name" {
   type        = string
   description = "Globally unique name for the NFS storage account (3-24 chars, lowercase alphanumeric)"
 }
-
-variable "enable_gitlab_public_ip" {
-  type        = bool
-  default     = false
-  description = "Temporarily expose GitLab VM with a public IP for migration SSH/rsync. Set false when done — destroys the IP and removes the NSG rule."
-}

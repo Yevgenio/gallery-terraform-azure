@@ -3,7 +3,7 @@ resource "azurerm_kubernetes_cluster" "gallery" {
   location            = var.location
   resource_group_name = var.resource_group_name
   dns_prefix          = "gallery"
-  kubernetes_version  = "1.30"
+  kubernetes_version  = "1.35"
 
   api_server_access_profile {
     authorized_ip_ranges = [
@@ -15,7 +15,7 @@ resource "azurerm_kubernetes_cluster" "gallery" {
 
   default_node_pool {
     name                 = "default"
-    vm_size              = "Standard_B2s"  # 2 vCPU / 4 GB per node
+    vm_size              = "Standard_D2s_v3"  # 2 vCPU / 4 GB per node
     vnet_subnet_id       = var.aks_subnet_id
     auto_scaling_enabled = true
     min_count            = 2
@@ -39,7 +39,7 @@ resource "azurerm_kubernetes_cluster" "gallery" {
 resource "azurerm_kubernetes_cluster_node_pool" "agents" {
   name                  = "agents"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.gallery.id
-  vm_size               = "Standard_B2s"  # 2 vCPU / 4 GB
+  vm_size               = "Standard_D2s_v3"  # 2 vCPU / 4 GB
   vnet_subnet_id        = var.aks_subnet_id
   auto_scaling_enabled  = true
   min_count             = 0

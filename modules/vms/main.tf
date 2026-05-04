@@ -3,16 +3,6 @@ locals {
 }
 
 # ── GitLab VM ─────────────────────────────────────────────────────────────────
-resource "azurerm_public_ip" "gitlab_temp" {
-  count               = var.enable_gitlab_public_ip ? 1 : 0
-  name                = "gitlab-temp-pip"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-  tags                = var.tags
-}
-
 resource "azurerm_network_interface" "gitlab" {
   name                = "gitlab-nic"
   location            = var.location
@@ -23,7 +13,6 @@ resource "azurerm_network_interface" "gitlab" {
     subnet_id                     = var.infra_subnet_id
     private_ip_address_allocation = "Static"
     private_ip_address            = "10.2.1.10"
-    public_ip_address_id          = var.enable_gitlab_public_ip ? azurerm_public_ip.gitlab_temp[0].id : null
   }
 
   tags = var.tags

@@ -15,24 +15,21 @@ resource "azurerm_resource_group" "gallery" {
 module "network" {
   source = "./modules/network"
 
-  resource_group_name     = azurerm_resource_group.gallery.name
-  location                = azurerm_resource_group.gallery.location
-  tags                    = local.common_tags
-  enable_gitlab_public_ip = var.enable_gitlab_public_ip
-  admin_ssh_cidr          = var.admin_ssh_cidr
+  resource_group_name = azurerm_resource_group.gallery.name
+  location            = azurerm_resource_group.gallery.location
+  tags                = local.common_tags
 }
 
 module "vms" {
   source = "./modules/vms"
 
-  resource_group_name     = azurerm_resource_group.gallery.name
-  location                = azurerm_resource_group.gallery.location
-  infra_subnet_id         = module.network.infra_subnet_id
-  gitlab_nsg_id           = module.network.gitlab_nsg_id
-  vault_nsg_id            = module.network.vault_nsg_id
-  ssh_public_key_path     = var.ssh_public_key_path
-  tags                    = local.common_tags
-  enable_gitlab_public_ip = var.enable_gitlab_public_ip
+  resource_group_name = azurerm_resource_group.gallery.name
+  location            = azurerm_resource_group.gallery.location
+  infra_subnet_id     = module.network.infra_subnet_id
+  gitlab_nsg_id       = module.network.gitlab_nsg_id
+  vault_nsg_id        = module.network.vault_nsg_id
+  ssh_public_key_path = var.ssh_public_key_path
+  tags                = local.common_tags
 }
 
 module "aks" {
@@ -60,8 +57,9 @@ module "ingress" {
 
   resource_group_name = azurerm_resource_group.gallery.name
   location            = azurerm_resource_group.gallery.location
-  appgw_subnet_id   = module.network.appgw_subnet_id
-  gitlab_private_ip = module.vms.gitlab_private_ip
+  appgw_subnet_id     = module.network.appgw_subnet_id
+  bastion_subnet_id   = module.network.bastion_subnet_id
+  gitlab_private_ip   = module.vms.gitlab_private_ip
   ssl_cert_path       = var.appgw_ssl_cert_path
   ssl_cert_password   = var.appgw_ssl_cert_password
   tags                = local.common_tags

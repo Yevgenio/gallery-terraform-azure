@@ -31,15 +31,14 @@ terraform apply \
 terraform fmt
 terraform validate
 
-# SSH to a VM — toggle public IP on, SSH in, toggle off when done
-# 1. Open (creates public IP + NSG rule for your IP only, VM does NOT restart)
-terraform apply -var="enable_gitlab_public_ip=true" -var="admin_ssh_cidr=<YOUR_IP>/32" \
-  -var="appgw_ssl_cert_path=./gallery.pfx" -var="appgw_ssl_cert_password=changeme"
-# 2. Connect
-ssh azureuser@$(terraform output -raw gitlab_public_ip)
-# 3. Close (destroys public IP + removes NSG rule)
-terraform apply -var="enable_gitlab_public_ip=false" -var="admin_ssh_cidr=<YOUR_IP>/32" \
-  -var="appgw_ssl_cert_path=./gallery.pfx" -var="appgw_ssl_cert_password=changeme"
+# SSH to a VM via Azure Bastion (no direct SSH — VMs have no public IPs)
+az network bastion ssh \
+  --name gallery-bastion \
+  --resource-group gallery-rg \
+  --target-resource-id $(az vm show -g gallery-rg -n gitlab-vm --query id -o tsv) \
+  --auth-type ssh-key \
+  --username azureuser \
+  --ssh-key ~/.ssh/id_rsa
 
 # Configure kubectl after AKS apply (run from an allowed CIDR)
 az aks get-credentials --resource-group gallery-rg --name gallery-aks
@@ -66,14 +65,15 @@ az storage container create --name tfstate --account-name gallerytfstate
 
 Single-file-per-concern layout (no modules). All resources in `gallery-rg`, `westeurope`.
 
-**Network** (`network.tf`) — VNet `10.2.0.0/16` with three subnets:
+**Network** (`network.tf`) — VNet `10.2.0.0/16` with four subnets:
 - `appgw-subnet` (`10.2.0.0/24`) — Application Gateway (dedicated, Azure requirement); public-facing
-- `infra-subnet` (`10.2.1.0/24`) — GitLab + Vault VMs; no public IPs by default; NAT Gateway for outbound
+- `infra-subnet` (`10.2.1.0/24`) — GitLab + Vault VMs; no public IPs; NAT Gateway for outbound
 - `aks-subnet` (`10.2.2.0/24`) — AKS node pool; NAT Gateway for outbound
+- `AzureBastionSubnet` (`10.2.3.0/26`) — Azure Bastion; name is mandatory, /26 minimum
 
 **Load balancer** (`appgw.tf`) — Application Gateway Standard_v2 terminates HTTP/HTTPS/5050, routes to GitLab VM. Port 80 permanently redirects to 443. AKS backend pool is defined but empty — populate with the AKS internal LB IP post-deploy or enable AGIC.
 
-**SSH access** — No Bastion. Use `enable_gitlab_public_ip=true` to temporarily attach a public IP + NSG rule (locked to `admin_ssh_cidr`) to the GitLab VM. Set back to `false` when done — destroys the IP instantly, VM does not restart.
+**SSH access** (`modules/ingress`) — Azure Bastion Standard SKU. VMs have no public IPs; all SSH goes through Bastion. Use `az network bastion ssh` for shell access and `az network bastion tunnel` for file transfer (scp/rsync via local port forward).
 
 **VMs** (`vms.tf`) — Ubuntu 22.04 LTS, static private IPs, system-assigned managed identity, no public IPs:
 - GitLab CE (`10.2.1.10`, Standard_B4ms, 100 GB SSD)

@@ -30,6 +30,13 @@ resource "azurerm_subnet" "aks" {
   service_endpoints    = ["Microsoft.Storage"]
 }
 
+# Name must be exactly "AzureBastionSubnet"; minimum /26
+resource "azurerm_subnet" "bastion" {
+  name                 = "AzureBastionSubnet"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.gallery.name
+  address_prefixes     = ["10.2.3.0/26"]
+}
 
 # ── NAT Gateway ───────────────────────────────────────────────────────────────
 resource "azurerm_public_ip" "nat" {
@@ -115,6 +122,117 @@ resource "azurerm_subnet_network_security_group_association" "appgw" {
   network_security_group_id = azurerm_network_security_group.appgw.id
 }
 
+resource "azurerm_network_security_group" "bastion" {
+  name                = "bastion-nsg"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  security_rule {
+    name                       = "Allow-HTTPS-Internet"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "Internet"
+    source_port_range          = "*"
+    destination_address_prefix = "*"
+    destination_port_range     = "443"
+  }
+
+  security_rule {
+    name                       = "Allow-GatewayManager"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "GatewayManager"
+    source_port_range          = "*"
+    destination_address_prefix = "*"
+    destination_port_ranges    = ["443", "4443"]
+  }
+
+  security_rule {
+    name                       = "Allow-AzureLoadBalancer"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "AzureLoadBalancer"
+    source_port_range          = "*"
+    destination_address_prefix = "*"
+    destination_port_range     = "443"
+  }
+
+  # Required for Bastion host-to-host coordination
+  security_rule {
+    name                       = "Allow-BastionHostComm-Inbound"
+    priority                   = 130
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "VirtualNetwork"
+    source_port_range          = "*"
+    destination_address_prefix = "VirtualNetwork"
+    destination_port_ranges    = ["8080", "5701"]
+  }
+
+  security_rule {
+    name                       = "Allow-SshRdp-VNet"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "*"
+    source_port_range          = "*"
+    destination_address_prefix = "VirtualNetwork"
+    destination_port_ranges    = ["22", "3389"]
+  }
+
+  security_rule {
+    name                       = "Allow-AzureCloud"
+    priority                   = 110
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "*"
+    source_port_range          = "*"
+    destination_address_prefix = "AzureCloud"
+    destination_port_range     = "443"
+  }
+
+  # Required for Bastion host-to-host coordination
+  security_rule {
+    name                       = "Allow-BastionHostComm-Outbound"
+    priority                   = 120
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "*"
+    source_port_range          = "*"
+    destination_address_prefix = "VirtualNetwork"
+    destination_port_ranges    = ["8080", "5701"]
+  }
+
+  # Required for Bastion to validate session tokens
+  security_rule {
+    name                       = "Allow-GetSessionInfo-Outbound"
+    priority                   = 130
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "*"
+    source_port_range          = "*"
+    destination_address_prefix = "Internet"
+    destination_port_range     = "80"
+  }
+
+  tags = var.tags
+}
+
+resource "azurerm_subnet_network_security_group_association" "bastion" {
+  subnet_id                 = azurerm_subnet.bastion.id
+  network_security_group_id = azurerm_network_security_group.bastion.id
+}
 
 resource "azurerm_network_security_group" "gitlab" {
   name                = "gitlab-nsg"
@@ -155,21 +273,6 @@ resource "azurerm_network_security_group" "gitlab" {
     source_port_range          = "*"
     destination_address_prefix = "*"
     destination_port_range     = "22"
-  }
-
-  dynamic "security_rule" {
-    for_each = var.enable_gitlab_public_ip ? [1] : []
-    content {
-      name                       = "Allow-Temp-Admin-SSH"
-      priority                   = 200
-      direction                  = "Inbound"
-      access                     = "Allow"
-      protocol                   = "Tcp"
-      source_address_prefix      = var.admin_ssh_cidr
-      source_port_range          = "*"
-      destination_address_prefix = "*"
-      destination_port_range     = "22"
-    }
   }
 
   tags = var.tags
