@@ -23,10 +23,10 @@ output "aks_get_credentials" {
   description = "Configure kubectl (authorized IP ranges apply — run from an allowed CIDR)"
 }
 
-output "nfs_mount_path" {
-  value       = module.storage.nfs_mount_path
-  description = "NFS mount path — use in Kubernetes PersistentVolume or StorageClass parameters"
-}
+# output "nfs_mount_path" {
+#   value       = module.storage.nfs_mount_path
+#   description = "NFS mount path — use in Kubernetes PersistentVolume or StorageClass parameters"
+# }
 
 output "internal_dns_zone" {
   value       = module.network.internal_dns_zone

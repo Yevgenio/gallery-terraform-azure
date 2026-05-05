@@ -5,88 +5,105 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# First-time init — requires a backend.conf file (see below, do NOT commit it)
-terraform init -backend-config=backend.conf
+# Init — backend config is hardcoded in backend.tf (use_azuread_auth = true, no key-based auth)
+terraform init
 
-# Migrate existing local state to the remote backend
-terraform init -backend-config=backend.conf -migrate-state
-
-# Generate a self-signed PFX cert for the Application Gateway (initial deploy only)
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes \
-  -subj "/CN=gitlab.boukingolts.art"
-openssl pkcs12 -export -in cert.pem -inkey key.pem -out gallery.pfx -passout pass:changeme
-
-# Preview / apply — three required vars (no defaults)
+# Preview / apply — required vars (no defaults)
 terraform plan \
   -var="admin_ssh_cidr=<YOUR_IP>/32" \
   -var="appgw_ssl_cert_path=./gallery.pfx" \
-  -var="appgw_ssl_cert_password=changeme"
+  -var="appgw_ssl_cert_password=<CERT_PASSWORD>" \
+  -var="storage_account_name=<NFS_STORAGE_ACCOUNT>"
 
 terraform apply \
   -var="admin_ssh_cidr=<YOUR_IP>/32" \
   -var="appgw_ssl_cert_path=./gallery.pfx" \
-  -var="appgw_ssl_cert_password=changeme"
+  -var="appgw_ssl_cert_password=<CERT_PASSWORD>" \
+  -var="storage_account_name=<NFS_STORAGE_ACCOUNT>"
 
 # Format / validate
 terraform fmt
 terraform validate
 
-# SSH to a VM via Azure Bastion (no direct SSH — VMs have no public IPs)
+# SSH to a VM via Bastion tunnel
 az network bastion ssh \
-  --name gallery-bastion \
-  --resource-group gallery-rg \
+  --name gallery-bastion --resource-group gallery-rg \
   --target-resource-id $(az vm show -g gallery-rg -n gitlab-vm --query id -o tsv) \
-  --auth-type ssh-key \
-  --username azureuser \
-  --ssh-key ~/.ssh/id_rsa
+  --auth-type ssh-key --username azureuser --ssh-key ~/.ssh/id_rsa
 
-# Configure kubectl after AKS apply (run from an allowed CIDR)
+# File transfer via Bastion tunnel (Terminal 1: open tunnel, Terminal 2: scp/rsync)
+az network bastion tunnel \
+  --name gallery-bastion --resource-group gallery-rg \
+  --target-resource-id $(az vm show -g gallery-rg -n gitlab-vm --query id -o tsv) \
+  --resource-port 22 --port 2222
+scp -P 2222 localfile azureuser@127.0.0.1:/remote/path/
+
+# Configure kubectl after AKS apply
 az aks get-credentials --resource-group gallery-rg --name gallery-aks
-```
-
-### backend.conf (create manually, never commit)
-
-```
-resource_group_name  = "tfstate-rg"
-storage_account_name = "gallerytfstate"
-container_name       = "tfstate"
-key                  = "gallery/terraform.tfstate"
-```
-
-Pre-requisite storage account (run once out-of-band):
-```bash
-az group create --name tfstate-rg --location westeurope
-az storage account create --name gallerytfstate --resource-group tfstate-rg \
-  --sku Standard_LRS --https-only true --min-tls-version TLS1_2
-az storage container create --name tfstate --account-name gallerytfstate
 ```
 
 ## Architecture
 
-Single-file-per-concern layout (no modules). All resources in `gallery-rg`, `westeurope`.
+Modular layout under `modules/`. All resources in `gallery-rg`, `westeurope`.
 
-**Network** (`network.tf`) — VNet `10.2.0.0/16` with four subnets:
-- `appgw-subnet` (`10.2.0.0/24`) — Application Gateway (dedicated, Azure requirement); public-facing
+**Network** (`modules/network`) — VNet `gallery-vnet` (`10.2.0.0/16`) with four subnets:
+- `appgw-subnet` (`10.2.0.0/24`) — Application Gateway; public-facing
 - `infra-subnet` (`10.2.1.0/24`) — GitLab + Vault VMs; no public IPs; NAT Gateway for outbound
 - `aks-subnet` (`10.2.2.0/24`) — AKS node pool; NAT Gateway for outbound
-- `AzureBastionSubnet` (`10.2.3.0/26`) — Azure Bastion; name is mandatory, /26 minimum
+- `AzureBastionSubnet` (`10.2.3.0/26`) — Azure Bastion; name mandatory, /26 minimum
 
-**Load balancer** (`appgw.tf`) — Application Gateway Standard_v2 terminates HTTP/HTTPS/5050, routes to GitLab VM. Port 80 permanently redirects to 443. AKS backend pool is defined but empty — populate with the AKS internal LB IP post-deploy or enable AGIC.
+NAT Gateway public IP: `20.23.242.48` — included in AKS API server authorized IP ranges.
 
-**SSH access** (`modules/ingress`) — Azure Bastion Standard SKU. VMs have no public IPs; all SSH goes through Bastion. Use `az network bastion ssh` for shell access and `az network bastion tunnel` for file transfer (scp/rsync via local port forward).
+**Load balancer** (`modules/ingress`) — Application Gateway Standard_v2, hostname-based routing:
+- `gitlab.boukingolts.art` → GitLab VM (`10.2.1.10`)
+- `argocd.boukingolts.art` → AKS internal LB (Traefik)
+- `boukingolts.art` → AKS internal LB (Traefik)
+- `grafana.boukingolts.art` → AKS internal LB (Traefik)
 
-**VMs** (`vms.tf`) — Ubuntu 22.04 LTS, static private IPs, system-assigned managed identity, no public IPs:
-- GitLab CE (`10.2.1.10`, Standard_B4ms, 100 GB SSD)
-- HashiCorp Vault (`10.2.1.20`, Standard_B2s, 30 GB SSD) — API accessible only from AKS subnet on port 8200
+Port 80 permanently redirects to 443. AKS backend pool IP set via `aks_internal_lb_ip` variable after Traefik internal LB is deployed.
 
-**AKS** (`aks.tf`) — `gallery-aks`, Kubernetes 1.30, Azure CNI, 2–5× Standard_D2s_v3 (autoscaling). API server restricted to `admin_ssh_cidr` + infra subnet + appgw subnet. Kubelet identity has Storage Account Contributor on the AKS node resource group (not Contributor on the whole RG).
+**SSH access** (`modules/ingress`) — Azure Bastion **Standard SKU** (required for tunneling and file transfer). VMs have no public IPs.
 
-**Private DNS** (`dns.tf`) — zone `internal.gallery.local` linked to the VNet. Records: `gitlab → 10.2.1.10`, `vault → 10.2.1.20`.
+**VMs** (`modules/vms`) — static private IPs, system-assigned managed identity, no public IPs, 32 GB OS disk:
+- GitLab (`10.2.1.10`, Standard_D2s_v3) — boots from Azure Compute Gallery image `galleryImages/gitlab/1.0.0`. Docker + GitLab container managed by Ansible. GitLab data lives at `/mnt/gitlab_data` on the host.
+- Vault (`10.2.1.20`, Standard_D2as_v4) — API accessible only from AKS subnet on port 8200
 
-**State** (`main.tf`) — remote backend in Azure Blob Storage via partial config (`-backend-config=backend.conf`).
+**AKS** (`modules/aks`) — `gallery-aks`, Kubernetes 1.35, Azure CNI, 2–4× Standard_D2s_v3 (autoscaling). `outbound_type = "userAssignedNATGateway"` — uses the existing NAT Gateway for egress (prevents AKS from creating a competing outbound LB which breaks node-to-API-server connectivity). API server authorized IPs: `admin_ssh_cidr` + infra subnet + appgw subnet + NAT Gateway IP.
 
-**Key variables**: `admin_ssh_cidr`, `appgw_ssl_cert_path`, and `appgw_ssl_cert_password` have no defaults and must be passed on every plan/apply. See ARCHITECTURE.md for the full apply order and migration runbook.
+**Private DNS** (`modules/network`) — zone `internal.gallery.local` linked to the VNet:
+- `gitlab → 10.2.1.10`
+- `registry → 10.2.1.10`
+- `vault → 10.2.1.20`
+- `aks → CNAME to AKS cluster FQDN` (auto-updated by Terraform on each cluster recreation)
+
+**Storage** (`modules/storage`) — Azure Files Premium NFS share for AKS workloads.
+
+**State** — remote backend in Azure Blob Storage (`tfstatest3fe`, `tfstate-container`). Uses `use_azuread_auth = true` — key-based auth is disabled on the storage account. Requires `Storage Blob Data Contributor` role on the storage account.
+
+## Current Terraform state (2026-05-04)
+
+Only `azurerm_resource_group.gallery` remains in state — all other resources were torn down at end of day. The resource group is intentionally kept in state so the next `terraform apply` rebuilds everything inside it.
+
+`gallery-rg` contains an Azure Compute Gallery (`galleryImages`) with a GitLab VM image (`gitlab/1.0.0`) that must be preserved — it cannot be moved to another resource group (Azure limitation). Do NOT run `terraform destroy` on the resource group.
+
+## VM configuration
+
+VMs are provisioned bare by Terraform. Docker and application setup (GitLab container, Vault) is handled by **Ansible** from `../ansible/`.
+
+## AKS ingress
+
+Traefik runs inside AKS (migrated from on-prem). After deploying Traefik with `service.beta.kubernetes.io/azure-load-balancer-internal: "true"`, get its internal LB IP and set `aks_internal_lb_ip` in `terraform.tfvars`, then re-apply to wire it into the Application Gateway.
+
+## Known quota constraints
+
+Subscription vCPU limit in westeurope: **10 cores**. Current baseline usage:
+- GitLab VM (Standard_D2s_v3): 2 vCPU
+- Vault VM (Standard_D2as_v4): 2 vCPU
+- AKS min 2 nodes (Standard_D2s_v3): 4 vCPU
+- Total at minimum: 8/10 vCPU
+
+AKS can scale to max 4 nodes but will hit quota at 3 nodes (12 vCPU needed, 10 limit). Request a quota increase or reduce VM sizes if autoscaling beyond 1 additional node is needed.
 
 ## IDE false positives
 
-The Terraform language server may flag `api_server_authorized_ip_ranges` and `enable_auto_scaling` in `aks.tf` as unexpected. These are valid attributes in azurerm `~> 3.110` (v3.x); they were renamed in v4.x which the LSP may use for schema lookup.
+The Terraform language server may flag `api_server_authorized_ip_ranges` and `auto_scaling_enabled` as unexpected. These are valid attributes in azurerm `~> 4.x`; the LSP schema may lag behind.

@@ -40,18 +40,19 @@ module "aks" {
   aks_subnet_id       = module.network.aks_subnet_id
   admin_ssh_cidr      = var.admin_ssh_cidr
   nat_gateway_pip     = module.network.nat_gateway_pip
+  vnet_id             = module.network.vnet_id
   tags                = local.common_tags
 }
 
-module "storage" {
-  source = "./modules/storage"
-
-  resource_group_name  = azurerm_resource_group.gallery.name
-  location             = azurerm_resource_group.gallery.location
-  storage_account_name = var.storage_account_name
-  aks_subnet_id        = module.network.aks_subnet_id
-  tags                 = local.common_tags
-}
+# module "storage" {
+#   source = "./modules/storage"
+#
+#   resource_group_name  = azurerm_resource_group.gallery.name
+#   location             = azurerm_resource_group.gallery.location
+#   storage_account_name = var.storage_account_name
+#   aks_subnet_id        = module.network.aks_subnet_id
+#   tags                 = local.common_tags
+# }
 
 resource "azurerm_private_dns_cname_record" "aks" {
   name                = "aks"
