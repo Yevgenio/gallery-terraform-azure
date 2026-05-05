@@ -69,6 +69,14 @@ resource "azurerm_application_gateway" "main" {
     request_timeout       = 60
   }
 
+  backend_http_settings {
+    name                  = "registry-http"
+    cookie_based_affinity = "Disabled"
+    port                  = 5050
+    protocol              = "Http"
+    request_timeout       = 60
+  }
+
   # Host header is preserved so the AKS ingress controller can route by hostname.
   backend_http_settings {
     name                                = "aks-http"
@@ -126,6 +134,15 @@ resource "azurerm_application_gateway" "main" {
   }
 
   http_listener {
+    name                           = "https-registry"
+    frontend_ip_configuration_name = "public"
+    frontend_port_name             = "https"
+    protocol                       = "Https"
+    ssl_certificate_name           = "gallery-cert"
+    host_names                     = [var.registry_hostname]
+  }
+
+  http_listener {
     name                           = "https-argocd"
     frontend_ip_configuration_name = "public"
     frontend_port_name             = "https"
@@ -161,6 +178,15 @@ resource "azurerm_application_gateway" "main" {
     http_listener_name         = "https-gitlab"
     backend_address_pool_name  = "gitlab"
     backend_http_settings_name = "gitlab-http"
+  }
+
+  request_routing_rule {
+    name                       = "https-registry"
+    rule_type                  = "Basic"
+    priority                   = 25
+    http_listener_name         = "https-registry"
+    backend_address_pool_name  = "gitlab"
+    backend_http_settings_name = "registry-http"
   }
 
   request_routing_rule {
@@ -207,6 +233,7 @@ resource "azurerm_bastion_host" "main" {
   location            = var.location
   resource_group_name = var.resource_group_name
   sku                 = "Standard"
+  tunneling_enabled   = true
 
   ip_configuration {
     name                 = "ipconfig"

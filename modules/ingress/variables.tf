@@ -30,6 +30,11 @@ variable "gitlab_hostname" {
   default = "gitlab.boukingolts.art"
 }
 
+variable "registry_hostname" {
+  type    = string
+  default = "registry.boukingolts.art"
+}
+
 variable "argocd_hostname" {
   type    = string
   default = "argocd.boukingolts.art"
