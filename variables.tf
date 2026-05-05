@@ -57,3 +57,9 @@ variable "storage_account_name" {
   type        = string
   description = "Globally unique name for the NFS storage account (3-24 chars, lowercase alphanumeric)"
 }
+
+variable "aks_internal_lb_ip" {
+  type        = string
+  default     = ""
+  description = "AKS internal LoadBalancer IP — set after Traefik ILB is provisioned (pinned to 10.2.2.100)"
+}

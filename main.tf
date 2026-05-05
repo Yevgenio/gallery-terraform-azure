@@ -71,6 +71,7 @@ module "ingress" {
   appgw_subnet_id     = module.network.appgw_subnet_id
   bastion_subnet_id   = module.network.bastion_subnet_id
   gitlab_private_ip   = module.vms.gitlab_private_ip
+  aks_internal_lb_ip  = var.aks_internal_lb_ip
   ssl_cert_path       = var.appgw_ssl_cert_path
   ssl_cert_password   = var.appgw_ssl_cert_password
   tags                = local.common_tags

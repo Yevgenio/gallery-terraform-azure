@@ -77,7 +77,7 @@ resource "azurerm_application_gateway" "main" {
     request_timeout       = 60
   }
 
-  # Host header is preserved so the AKS ingress controller can route by hostname.
+  # Plain HTTP to Traefik port 80 (web entrypoint). App Gateway terminates TLS.
   backend_http_settings {
     name                                = "aks-http"
     cookie_based_affinity               = "Disabled"
@@ -85,6 +85,21 @@ resource "azurerm_application_gateway" "main" {
     protocol                            = "Http"
     request_timeout                     = 60
     pick_host_name_from_backend_address = false
+    probe_name                          = "aks-probe"
+  }
+
+  # Traefik returns 404 on root path (no route matched) — treat as healthy.
+  probe {
+    name                = "aks-probe"
+    protocol            = "Http"
+    path                = "/"
+    host                = "10.2.2.100"
+    interval            = 30
+    timeout             = 30
+    unhealthy_threshold = 3
+    match {
+      status_code = ["200-404"]
+    }
   }
 
   # ── SSL certificate ────────────────────────────────────────────────────────
