@@ -2,6 +2,13 @@ locals {
   ssh_public_key = file(pathexpand(var.ssh_public_key_path))
 }
 
+data "azurerm_shared_image_version" "gitlab" {
+  name                = "1.0.0"
+  image_name          = "gitlab"
+  gallery_name        = "galleryImages"
+  resource_group_name = "gallery-rg"
+}
+
 # ── GitLab VM ─────────────────────────────────────────────────────────────────
 resource "azurerm_network_interface" "gitlab" {
   name                = "gitlab-nic"
@@ -23,30 +30,23 @@ resource "azurerm_network_interface_security_group_association" "gitlab" {
   network_security_group_id = var.gitlab_nsg_id
 }
 
-resource "azurerm_linux_virtual_machine" "gitlab" {
+resource "azurerm_virtual_machine" "gitlab" {
   name                  = "gitlab-vm"
   location              = var.location
   resource_group_name   = var.resource_group_name
-  size                  = "Standard_D2s_v3"  # 2 vCPU / 8 GB
-  admin_username        = "azureuser"
+  vm_size               = "Standard_D2s_v3"
   network_interface_ids = [azurerm_network_interface.gitlab.id]
 
-  admin_ssh_key {
-    username   = "azureuser"
-    public_key = local.ssh_public_key
+  storage_image_reference {
+    id = data.azurerm_shared_image_version.gitlab.id
   }
 
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "StandardSSD_LRS"
-    disk_size_gb         = 32
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
-    version   = "latest"
+  storage_os_disk {
+    name              = "gitlab-osdisk"
+    caching           = "ReadWrite"
+    create_option     = "FromImage"
+    managed_disk_type = "StandardSSD_LRS"
+    disk_size_gb      = 32
   }
 
   identity {
