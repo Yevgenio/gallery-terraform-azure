@@ -25,3 +25,9 @@ resource "azurerm_storage_share" "nfs" {
   quota              = 100
   enabled_protocol   = "NFS"
 }
+
+resource "azurerm_role_assignment" "aks_nfs" {
+  principal_id         = var.aks_cluster_identity_principal_id
+  role_definition_name = "Storage Account Contributor"
+  scope                = azurerm_storage_account.nfs.id
+}

@@ -19,9 +19,9 @@ variable "nat_gateway_pip" {
   description = "Public IP of the NAT Gateway — added to API server authorized IP ranges so nodes can reach it"
 }
 
-variable "vnet_id" {
+variable "resource_group_id" {
   type        = string
-  description = "VNet ID — AKS identity needs Network Contributor to join subnets for load balancer provisioning"
+  description = "gallery-rg resource ID — AKS identity needs Network Contributor here to join subnets and NSGs"
 }
 
 variable "tags" {

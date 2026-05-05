@@ -52,5 +52,5 @@ resource "azurerm_role_assignment" "aks_storage" {
 resource "azurerm_role_assignment" "aks_vnet" {
   principal_id         = azurerm_kubernetes_cluster.gallery.identity[0].principal_id
   role_definition_name = "Network Contributor"
-  scope                = var.vnet_id
+  scope                = var.resource_group_id
 }

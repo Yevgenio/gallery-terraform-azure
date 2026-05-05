@@ -29,7 +29,3 @@ output "internal_dns_zone" {
 output "nat_gateway_pip" {
   value = azurerm_public_ip.nat.ip_address
 }
-
-output "vnet_id" {
-  value = azurerm_virtual_network.gallery.id
-}

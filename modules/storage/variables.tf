@@ -20,6 +20,11 @@ variable "aks_subnet_id" {
   description = "AKS subnet ID — storage account network rules restrict access to this subnet"
 }
 
+variable "aks_cluster_identity_principal_id" {
+  type        = string
+  description = "AKS cluster identity principal ID — granted Storage Account Contributor on the NFS account for CSI driver file share operations"
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
