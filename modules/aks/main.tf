@@ -48,3 +48,9 @@ resource "azurerm_role_assignment" "aks_storage" {
   role_definition_name = "Storage Account Contributor"
   scope                = data.azurerm_resource_group.aks_nodes.id
 }
+
+resource "azurerm_role_assignment" "aks_vnet" {
+  principal_id         = azurerm_kubernetes_cluster.gallery.identity[0].principal_id
+  role_definition_name = "Network Contributor"
+  scope                = var.vnet_id
+}
